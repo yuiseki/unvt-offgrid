@@ -78,6 +78,10 @@ npm run e2e          # Playwright, phone-sized Chromium; builds dist/ and serves
 npm run build        # dist/
 ```
 
+GitHub Actions (`.github/workflows/ci.yml`) runs the type check, the unit
+tests and the build on every push to `main` and on pull requests. The e2e
+tests are not run there: they need the planet archive and the published style.
+
 The e2e server (`e2e/server.mjs`) lays files out like the production server and
 uses the same MIME types as its nginx. It needs a directory holding the
 published `styles/osm-bright.json`, `sprites/` and `fonts/`, given as
@@ -87,6 +91,10 @@ published `styles/osm-bright.json`, `sprites/` and `fonts/`, given as
 ```bash
 MAPS_DIR=/path/to/static/maps npm run e2e
 ```
+
+Besides files, the server takes a few test controls: `POST /__cut?after=N`
+drops the next archive download after N bytes, `POST /__slow?ms=M` sends it
+in 64 kB pieces M ms apart, and `GET /__log` returns the request log.
 
 Headless Chromium gets WebGL2 from SwiftShader. If `DISPLAY` is set (an SSH X11
 forward, say) ANGLE tries to open an X connection, the GPU process exits and
