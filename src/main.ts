@@ -138,7 +138,9 @@ async function showSelection(id: string) {
   map.addLayer({ id: "pick", type: "fill", source: "pick", paint: { "fill-color": "#e0662a", "fill-opacity": 0.45 } });
   map.addLayer({ id: "pick-line", type: "line", source: "pick", paint: { "line-color": "#b8441a", "line-width": 1.5 } });
   const features = await Promise.all(
-    [...children, ...(node.pmtiles ? [node] : [])]
+    // A child drawn with the parent's own outline (the whole of Kanto among
+    // its prefectures) would cover its siblings: list it, do not draw it.
+    [...children.filter((c) => c.outline !== node.outline), ...(node.pmtiles ? [node] : [])]
       .filter((c) => c.outline)
       .map(async (c) => {
         const gj = (await (await fetch(rel(c.outline!))).json()) as FeatureCollection;
@@ -302,13 +304,36 @@ async function prefetchGlyphs() {
   if (failed) console.warn(`${failed} of ${urls.length} glyph ranges could not be cached`);
 }
 
+const LAST_KEY = "offgrid:last-region";
+
+function rememberLast(id: string) {
+  try {
+    localStorage.setItem(LAST_KEY, id);
+  } catch {
+    // storage blocked: start falls back to the first downloaded region
+  }
+}
+
+function lastOpened(): string | null {
+  try {
+    return localStorage.getItem(LAST_KEY);
+  } catch {
+    return null;
+  }
+}
+
 async function showMap(node: RegionNode) {
   setPickHandler(null);
-  document.body.dataset.view = "map";
-  document.body.dataset.node = node.id;
+  rememberLast(node.id);
   const style = offlineStyle(await fetchStyle(), archiveUrl(node), MAPS_BASE);
+  const loaded = new Promise<void>((r) => map.once("style.load", () => r()));
   map.setStyle(style as unknown as StyleSpecification);
   if (node.bbox) map.fitBounds(node.bbox as [number, number, number, number], { padding: 8, duration: 0 });
+  // Mark the view only once the region's style is in: until then the map
+  // still holds the picker's style, which is already "loaded".
+  await loaded;
+  document.body.dataset.view = "map";
+  document.body.dataset.node = node.id;
   const back = document.createElement("button");
   back.id = "regions";
   back.textContent = "地域を選ぶ";
@@ -340,8 +365,11 @@ async function start() {
     navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch((e) => console.error("service worker", e));
   }
   catalog = (await (await fetch(CATALOG_URL)).json()) as RegionNode;
-  // Open the map straight away if a region is already on the device.
-  for (const leaf of leaves(catalog)) {
+  // Open the map straight away if a region is already on the device:
+  // the one opened last, else the first in the catalogue.
+  const all = leaves(catalog);
+  const last = all.find((l) => l.id === lastOpened());
+  for (const leaf of last ? [last, ...all] : all) {
     if (await isDownloaded(leaf)) return showMap(leaf);
   }
   return showSelection(catalog.id);

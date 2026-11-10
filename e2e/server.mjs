@@ -2,7 +2,7 @@
 //
 //   /static/maps/offgrid/...   dist/ (the app)
 //   /static/maps/...           MAPS_DIR (published style, sprites, fonts)
-//   /static/openstreetmap/regions/asia/japan/kanto/kanto-251124.pmtiles
+//   /static/openstreetmap/regions/asia/japan/kanto/**.pmtiles
 //                              REGION_FILE (a small stand-in archive)
 //
 // regions.json is rewritten so the archive size matches REGION_FILE.
@@ -16,7 +16,7 @@ const PORT = Number(process.env.PORT ?? 8765);
 const DIST = process.env.DIST ?? "dist";
 const MAPS_DIR = process.env.MAPS_DIR;
 const REGION_FILE = process.env.REGION_FILE ?? "e2e/fixtures/kanto-z6.pmtiles";
-const REGION_PATH = "/static/openstreetmap/regions/asia/japan/kanto/kanto-251124.pmtiles";
+const REGION_DIR = "/static/openstreetmap/regions/asia/japan/kanto/";
 
 // Same as the production nginx, which has no entry for .mjs (served as
 // application/octet-stream, and a module worker with that type will not load).
@@ -35,7 +35,8 @@ let cutAfter = null;
 let log = [];
 
 function resolve(pathname) {
-  if (pathname === REGION_PATH) return REGION_FILE;
+  // Every archive under Kanto (the whole region and each prefecture) is the stand-in.
+  if (pathname.startsWith(REGION_DIR) && pathname.endsWith(".pmtiles")) return REGION_FILE;
   const p = normalize(decodeURIComponent(pathname));
   if (p.startsWith("/static/maps/offgrid/")) {
     const rest = p.slice("/static/maps/offgrid/".length) || "index.html";

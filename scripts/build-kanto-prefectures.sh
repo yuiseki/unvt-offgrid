@@ -44,6 +44,15 @@ for p in "${PREFS[@]}"; do
   fi
 done
 
+# Simplified outlines for the region picker.
+mkdir -p "$ROOT/public/geo/kanto"
+for p in "${PREFS[@]}"; do
+  name=${p#*:}
+  rm -f "$ROOT/public/geo/kanto/$name.geojson"
+  ogr2ogr -f GeoJSON -lco COORDINATE_PRECISION=4 -lco RFC7946=YES -simplify 0.005 \
+    "$ROOT/public/geo/kanto/$name.geojson" "$REG/$name.geojson"
+done
+
 # Extracts, one at a time.
 for p in "${PREFS[@]}"; do
   name=${p#*:}

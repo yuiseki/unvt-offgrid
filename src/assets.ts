@@ -5,16 +5,6 @@
  * glyphs already published under <maps>/ (styles/, sprites/, fonts/).
  */
 
-/** Data files precached on install, relative to the service worker scope.
- * The code files have hashed names and are added by the build (__SHELL__). */
-export const DATA_FILES = [
-  "./regions.json",
-  "./geo/world.geojson",
-  "./geo/japan.geojson",
-  "./geo/japan-prefectures.geojson",
-  "./geo/kanto.geojson",
-];
-
 /** Kept across app updates: map assets do not change with the app version. */
 export const ASSET_CACHE = "offgrid-assets";
 

@@ -33,15 +33,35 @@ async function opfsFile(page: Page, name: string) {
   }, name);
 }
 
-async function downloadKanto(page: Page) {
+/**
+ * From the world level down to a leaf under Kanto, and download it. With a
+ * region already downloaded the app opens its map, so go back to the picker.
+ */
+async function download(page: Page, leaf: RegExp, leafId: string) {
   await page.goto("./");
+  await expect(page.locator("body")).toHaveAttribute("data-view", /select|map/);
+  if ((await page.locator("body").getAttribute("data-view")) === "map") {
+    await page.locator("#regions").click();
+    await page.locator(".crumbs button", { hasText: "世界" }).click();
+  }
   await expect(page.locator("body")).toHaveAttribute("data-node", "world");
   await page.getByRole("button", { name: /^日本/ }).click();
   await expect(page.locator("body")).toHaveAttribute("data-node", "japan");
   await page.getByRole("button", { name: /^関東/ }).click();
   await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
+  await page.getByRole("button", { name: leaf }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", leafId);
   await page.locator("#download").click();
   await expect(page.locator("body")).toHaveAttribute("data-view", "map", { timeout: 30_000 });
+}
+
+const downloadKanto = (page: Page) => download(page, /^関東まるごと/, "kanto-all");
+
+/** Ids of the pickable outlines currently on the selection map. */
+async function pickIds(page: Page) {
+  return page.evaluate(() =>
+    [...new Set((window as any).offgridMap.querySourceFeatures("pick").map((f: any) => f.properties.id))].sort(),
+  );
 }
 
 test("world > Japan > Kanto, download, then the map opens", async ({ page }) => {
@@ -101,6 +121,7 @@ test("an interrupted download resumes where it stopped", async ({ page, request 
   await page.goto("./");
   await page.getByRole("button", { name: /^日本/ }).click();
   await page.getByRole("button", { name: /^関東/ }).click();
+  await page.getByRole("button", { name: /^関東まるごと/ }).click();
   await page.locator("#download").click();
   await expect(page.locator("#status")).toContainText("失敗", { timeout: 20_000 });
   const part = await opfsFile(page, ARCHIVE + ".part");
@@ -133,6 +154,7 @@ test("the download does not start when the quota is too small", async ({ page })
   await page.goto("./");
   await page.getByRole("button", { name: /^日本/ }).click();
   await page.getByRole("button", { name: /^関東/ }).click();
+  await page.getByRole("button", { name: /^関東まるごと/ }).click();
   await page.locator("#download").click();
   await expect(page.locator("#status")).toContainText("空き容量が足りません");
   expect(await opfsFile(page, ARCHIVE + ".part")).toBeNull();
@@ -147,4 +169,59 @@ test("Safari gets a warning about the seven-day eviction", async ({ browser }) =
   await page.goto("./");
   await expect(page.locator("#warnings")).toContainText("7日間");
   await ctx.close();
+});
+
+test("Kanto offers the whole region and its seven prefectures", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: /^日本/ }).click();
+  await page.getByRole("button", { name: /^関東/ }).click();
+  await expect(page.locator(".children button")).toHaveText([
+    /^関東まるごと/,
+    /^茨城県/,
+    /^栃木県/,
+    /^群馬県/,
+    /^埼玉県/,
+    /^千葉県/,
+    /^東京都/,
+    /^神奈川県/,
+  ]);
+  await idle(page);
+  // The prefectures are pickable on the map; the whole of Kanto only from the list.
+  expect(await pickIds(page)).toEqual(["chiba", "gunma", "ibaraki", "kanagawa", "saitama", "tochigi", "tokyo"]);
+});
+
+test("two regions can be kept, and the last one opened comes up on start", async ({ page }) => {
+  await download(page, /^東京都/, "tokyo");
+  expect((await opfsFile(page, "tokyo-251124.pmtiles"))?.size).toBe(FIXTURE_SIZE);
+  await download(page, /^関東まるごと/, "kanto-all");
+  expect((await opfsFile(page, "tokyo-251124.pmtiles"))?.size).toBe(FIXTURE_SIZE);
+  expect((await opfsFile(page, ARCHIVE))?.size).toBe(FIXTURE_SIZE);
+
+  await page.reload();
+  await expect(page.locator("body")).toHaveAttribute("data-view", "map");
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto-all");
+
+  // Open Tokyo from the picker; it is what comes up next time.
+  await page.locator("#regions").click();
+  await page.getByRole("button", { name: "関東", exact: true }).click();
+  await page.getByRole("button", { name: /^東京都/ }).click();
+  await page.locator("#open").click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "tokyo");
+  await page.reload();
+  await expect(page.locator("body")).toHaveAttribute("data-view", "map");
+  await expect(page.locator("body")).toHaveAttribute("data-node", "tokyo");
+});
+
+test("the picker works offline, prefecture outlines included", async ({ page, context }) => {
+  await downloadKanto(page);
+  await idle(page);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.locator("body")).toHaveAttribute("data-view", "map");
+  await page.locator("#regions").click();
+  await page.getByRole("button", { name: "関東", exact: true }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
+  await idle(page);
+  expect(await pickIds(page)).toHaveLength(7);
 });

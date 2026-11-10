@@ -2,26 +2,173 @@
   "id": "world",
   "name": "世界",
   "outline": "geo/world.geojson",
-  "bbox": [-180, -60, 180, 75],
+  "bbox": [
+    -180,
+    -60,
+    180,
+    75
+  ],
   "children": [
     {
       "id": "japan",
       "name": "日本",
       "outline": "geo/japan.geojson",
       "backdrop": "geo/japan-prefectures.geojson",
-      "bbox": [122.9, 24.0, 146.0, 45.6],
+      "bbox": [
+        122.9,
+        24.0,
+        146.0,
+        45.6
+      ],
       "children": [
         {
           "id": "kanto",
           "name": "関東",
           "outline": "geo/kanto.geojson",
-          "bbox": [138.3, 34.8, 141.0, 37.2],
-          "pmtiles": {
-            "url": "../../openstreetmap/regions/asia/japan/kanto/kanto-251124.pmtiles",
-            "bytes": 294936503,
-            "maxzoom": 14,
-            "osmDate": "2025-11-24"
-          }
+          "bbox": [
+            138.3,
+            34.8,
+            141.0,
+            37.2
+          ],
+          "children": [
+            {
+              "id": "kanto-all",
+              "name": "関東まるごと",
+              "outline": "geo/kanto.geojson",
+              "bbox": [
+                138.3,
+                34.8,
+                141.0,
+                37.2
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/kanto-251124.pmtiles",
+                "bytes": 294936503,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            },
+            {
+              "id": "ibaraki",
+              "name": "茨城県",
+              "outline": "geo/kanto/ibaraki.geojson",
+              "bbox": [
+                139.654,
+                35.732,
+                140.859,
+                36.927
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/prefectures/ibaraki-251124.pmtiles",
+                "bytes": 38184524,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            },
+            {
+              "id": "tochigi",
+              "name": "栃木県",
+              "outline": "geo/kanto/tochigi.geojson",
+              "bbox": [
+                139.306,
+                36.201,
+                140.267,
+                37.144
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/prefectures/tochigi-251124.pmtiles",
+                "bytes": 29250643,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            },
+            {
+              "id": "gunma",
+              "name": "群馬県",
+              "outline": "geo/kanto/gunma.geojson",
+              "bbox": [
+                138.377,
+                35.97,
+                139.674,
+                37.039
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/prefectures/gunma-251124.pmtiles",
+                "bytes": 27429846,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            },
+            {
+              "id": "saitama",
+              "name": "埼玉県",
+              "outline": "geo/kanto/saitama.geojson",
+              "bbox": [
+                138.7,
+                35.752,
+                139.875,
+                36.271
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/prefectures/saitama-251124.pmtiles",
+                "bytes": 57820584,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            },
+            {
+              "id": "chiba",
+              "name": "千葉県",
+              "outline": "geo/kanto/chiba.geojson",
+              "bbox": [
+                139.752,
+                34.9,
+                140.879,
+                36.08
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/prefectures/chiba-251124.pmtiles",
+                "bytes": 52011869,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            },
+            {
+              "id": "tokyo",
+              "name": "東京都",
+              "outline": "geo/kanto/tokyo.geojson",
+              "bbox": [
+                138.9,
+                32.4,
+                140.4,
+                35.9
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/prefectures/tokyo-251124.pmtiles",
+                "bytes": 76571731,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            },
+            {
+              "id": "kanagawa",
+              "name": "神奈川県",
+              "outline": "geo/kanto/kanagawa.geojson",
+              "bbox": [
+                138.9,
+                35.117,
+                139.787,
+                35.654
+              ],
+              "pmtiles": {
+                "url": "../../openstreetmap/regions/asia/japan/kanto/prefectures/kanagawa-251124.pmtiles",
+                "bytes": 61353530,
+                "maxzoom": 14,
+                "osmDate": "2025-11-24"
+              }
+            }
+          ]
         }
       ]
     }

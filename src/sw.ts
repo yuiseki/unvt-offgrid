@@ -12,10 +12,10 @@
  */
 import { parseRange } from "./range";
 import { OPFS_DIR, opfsName } from "./regions";
-import { ASSET_CACHE, DATA_FILES, assetUrls } from "./assets";
+import { ASSET_CACHE, assetUrls } from "./assets";
 
 declare const __VERSION__: string;
-/** index.html and the hashed code files, from the build. */
+/** index.html, the hashed code files, regions.json and every outline it names, from the build. */
 declare const __SHELL__: string[];
 const sw = self as unknown as ServiceWorkerGlobalScope;
 const SHELL_CACHE = `offgrid-shell-${__VERSION__}`;
@@ -26,7 +26,7 @@ sw.addEventListener("install", (event) => {
       const shell = await caches.open(SHELL_CACHE);
       // addAll fails the install if any file is missing: better than an app
       // that half works offline.
-      await shell.addAll([...__SHELL__, ...DATA_FILES]);
+      await shell.addAll(__SHELL__);
       const assets = await caches.open(ASSET_CACHE);
       await assets.addAll(assetUrls(sw.registration.scope));
       await sw.skipWaiting();

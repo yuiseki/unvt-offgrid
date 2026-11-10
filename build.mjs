@@ -54,7 +54,15 @@ const index = readFileSync("public/index.html", "utf8").replace("./main.css", `.
 if (index.includes("./main.css") || index.includes("./main.js")) throw new Error("index.html placeholders not replaced");
 writeFileSync("dist/index.html", index);
 
-const shell = ["./", "./index.html", `./${main}`, `./${css}`, `./${downloadWorker}`, `./${maplibreWorker}`];
+// regions.json and every GeoJSON it names, so the picker works offline.
+const geo = new Set();
+(function walk(n) {
+  for (const k of ["outline", "backdrop"]) if (n[k]) geo.add(`./${n[k]}`);
+  (n.children ?? []).forEach(walk);
+})(JSON.parse(readFileSync("public/regions.json", "utf8")));
+for (const f of geo) readFileSync(`public/${f}`); // fail the build if one is missing
+
+const shell = ["./", "./index.html", `./${main}`, `./${css}`, `./${downloadWorker}`, `./${maplibreWorker}`, "./regions.json", ...geo];
 const version = hash(shell.join("\n"));
 await esbuild.build({
   entryPoints: ["src/sw.ts"],
@@ -65,4 +73,4 @@ await esbuild.build({
   outfile: "dist/sw.js",
   define: { __VERSION__: JSON.stringify(version), __SHELL__: JSON.stringify(shell) },
 });
-console.log(`built dist/ (${version}): ${shell.slice(2).join(" ")}`);
+console.log(`built dist/ (${version}): ${shell.slice(2, 6).join(" ")} + ${shell.length - 6} data files`);
