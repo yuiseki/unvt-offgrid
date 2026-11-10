@@ -79,9 +79,14 @@ npm run build        # dist/
 ```
 
 The e2e server (`e2e/server.mjs`) lays files out like the production server and
-uses the same MIME types as its nginx. It needs the published style, sprites
-and fonts (`MAPS_DIR`, required) and builds
-a small stand-in for the Kanto archive (zoom 0-6) with `e2e/make-fixture.sh`.
+uses the same MIME types as its nginx. It needs a directory holding the
+published `styles/osm-bright.json`, `sprites/` and `fonts/`, given as
+`MAPS_DIR`, and builds small stand-in archives with `e2e/make-fixture.sh`
+(cut from the planet archive given as `PLANET`, a path or URL):
+
+```bash
+MAPS_DIR=/path/to/static/maps npm run e2e
+```
 
 Headless Chromium gets WebGL2 from SwiftShader. If `DISPLAY` is set (an SSH X11
 forward, say) ANGLE tries to open an X connection, the GPU process exits and
@@ -105,8 +110,11 @@ OpenStreetMap data, © OpenStreetMap contributors, ODbL.
 
 ```bash
 npm run build
-rsync -a dist/ WEB_ROOT/static/maps/offgrid/   # no --delete
+rsync -a dist/ "$WEB_ROOT/static/maps/offgrid/"   # no --delete
 ```
+
+`WEB_ROOT` is the server's document root; the archives go under
+`$WEB_ROOT/static/openstreetmap/regions/` as laid out above.
 
 Cloudflare is in front of the server. Code files carry a content hash in their
 names, so an `index.html` that Cloudflare still serves from before a deploy

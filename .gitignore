@@ -3,3 +3,5 @@ dist/
 test-results/
 playwright-report/
 e2e/fixtures/*.pmtiles
+# scratch scripts kept next to node_modules while probing; never commit
+e2e/.*.mjs

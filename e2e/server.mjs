@@ -15,6 +15,10 @@ import { dirname, extname, join, normalize } from "node:path";
 const PORT = Number(process.env.PORT ?? 8765);
 const DIST = process.env.DIST ?? "dist";
 const MAPS_DIR = process.env.MAPS_DIR;
+if (!MAPS_DIR || !existsSync(join(MAPS_DIR, "styles/osm-bright.json"))) {
+  console.error("Set MAPS_DIR to a directory with styles/osm-bright.json, sprites/ and fonts/.");
+  process.exit(1);
+}
 const REGION_FILE = process.env.REGION_FILE ?? "e2e/fixtures/kanto-z6.pmtiles";
 const REGION_DIR = "/static/openstreetmap/regions/asia/japan/kanto/";
 
