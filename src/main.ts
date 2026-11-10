@@ -7,7 +7,7 @@ import type { DownloadEvent, DownloadRequest } from "./download-worker";
 import { isSafari } from "./env";
 import { OPFS_DIR, PART_SUFFIX, findPath, leaves, opfsName, type RegionNode } from "./regions";
 import { fontstacks, offlineStyle, type StyleLike } from "./style";
-import { OCEAN_TILE, parsePmtilesUrl, worldTileJson, type TileJson } from "./tiles";
+import { OCEAN_TILE, overlaps, parsePmtilesUrl, tileBounds, worldTileJson, type TileJson } from "./tiles";
 
 /** Hashed file names of the workers, from the build. */
 declare const __FILES__: { maplibreWorker: string; downloadWorker: string };
@@ -40,21 +40,71 @@ menu.onclick = () => onMenu();
 // ---------------------------------------------------------------- tiles
 
 const archives = new Map<string, PMTiles>();
+function archiveFor(url: string): PMTiles {
+  let a = archives.get(url);
+  if (!a) {
+    a = new PMTiles(url);
+    archives.set(url, a);
+  }
+  return a;
+}
+
+/**
+ * The map draws one source, `pmtiles://offgrid-local-N`, that stands for every
+ * archive on the device. Each tile is taken from the first archive that has
+ * it; archives cut from the same planet hold identical copies of the tiles
+ * along their shared borders, so the regions join without a seam. N changes
+ * whenever the set of archives does, so MapLibre does not reuse old tiles.
+ */
+const LOCAL = "offgrid-local-";
+let localArchives: string[] = [];
+let localGen = 0;
+
+/** Re-read which archives are on the device; true if the set changed. */
+async function refreshLocal(): Promise<boolean> {
+  const urls: string[] = [];
+  for (const leaf of leaves(catalog)) if (await isDownloaded(leaf)) urls.push(archiveUrl(leaf));
+  if (urls.join("\n") === localArchives.join("\n")) return false;
+  for (const u of archives.keys()) if (!urls.includes(u)) archives.delete(u);
+  localArchives = urls;
+  localGen++;
+  return true;
+}
+
+async function localTileJson(sourceUrl: string): Promise<TileJson> {
+  if (localArchives.length === 0) throw new Error("no region on this device");
+  const first = (await archiveFor(localArchives[0]).getTileJson(sourceUrl)) as TileJson;
+  const headers = await Promise.all(localArchives.map((u) => archiveFor(u).getHeader()));
+  return { ...worldTileJson(first, sourceUrl), minzoom: 0, maxzoom: Math.max(...headers.map((h) => h.maxZoom)) };
+}
+
+async function localTile(z: number, x: number, y: number, signal: AbortSignal): Promise<Uint8Array> {
+  const bounds = tileBounds(z, x, y);
+  for (const url of localArchives) {
+    const archive = archiveFor(url);
+    const h = await archive.getHeader();
+    // An archive whose bounds miss the tile cannot have it: skip the lookup.
+    if (!overlaps(bounds, [h.minLon, h.minLat, h.maxLon, h.maxLat])) continue;
+    const tile = await archive.getZxy(z, x, y, signal);
+    if (tile) return new Uint8Array(tile.data);
+  }
+  // No region has it: draw open sea (see tiles.ts).
+  return OCEAN_TILE.slice();
+}
+
 maplibregl.addProtocol("pmtiles", async (params, abort) => {
   const parsed = parsePmtilesUrl(params.url);
   if (!parsed) throw new Error(`not a pmtiles URL: ${params.url}`);
-  let archive = archives.get(parsed.archive);
-  if (!archive) {
-    archive = new PMTiles(parsed.archive);
-    archives.set(parsed.archive, archive);
+  if (parsed.archive.startsWith(LOCAL)) {
+    if (!parsed.tile) return { data: await localTileJson(params.url) };
+    const { z, x, y } = parsed.tile;
+    return { data: await localTile(z, x, y, abort.signal) };
   }
-  if (!parsed.tile) {
-    const tj = (await archive.getTileJson(params.url)) as TileJson;
-    return { data: worldTileJson(tj, params.url) };
-  }
+  // A single archive by URL.
+  const archive = archiveFor(parsed.archive);
+  if (!parsed.tile) return { data: worldTileJson((await archive.getTileJson(params.url)) as TileJson, params.url) };
   const { z, x, y } = parsed.tile;
   const tile = await archive.getZxy(z, x, y, abort.signal);
-  // Outside the region: the archive has no tile, draw open sea (see tiles.ts).
   return { data: tile ? new Uint8Array(tile.data) : OCEAN_TILE.slice() };
 });
 
@@ -392,7 +442,9 @@ function lastOpened(): string | null {
 async function showMap(node: RegionNode) {
   setPickHandler(null);
   rememberLast(node.id);
-  const style = offlineStyle(await fetchStyle(), archiveUrl(node), MAPS_BASE);
+  await refreshLocal();
+  // Every region on the device, on one map; `node` only places the camera.
+  const style = offlineStyle(await fetchStyle(), `${LOCAL}${localGen}`, MAPS_BASE);
   const loaded = new Promise<void>((r) => map.once("style.load", () => r()));
   map.setStyle(style as unknown as StyleSpecification);
   if (node.bbox) map.fitBounds(node.bbox as [number, number, number, number], { padding: 8, duration: 0 });

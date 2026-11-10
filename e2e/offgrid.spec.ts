@@ -6,6 +6,7 @@ const FIXTURE = "e2e/fixtures/kanto-z6.pmtiles";
 const FIXTURE_SIZE = statSync(FIXTURE).size;
 const FIXTURE_SHA256 = createHash("sha256").update(readFileSync(FIXTURE)).digest("hex");
 const ARCHIVE = "kanto-251124.pmtiles";
+const TOKYO_SIZE = statSync("e2e/fixtures/tokyo-box.pmtiles").size;
 
 async function idle(page: Page) {
   await page.evaluate(
@@ -194,9 +195,9 @@ test("Kanto offers the whole region and its seven prefectures", async ({ page })
 
 test("two regions can be kept, and the last one opened comes up on start", async ({ page }) => {
   await download(page, /^東京都/, "tokyo");
-  expect((await opfsFile(page, "tokyo-251124.pmtiles"))?.size).toBe(FIXTURE_SIZE);
+  expect((await opfsFile(page, "tokyo-251124.pmtiles"))?.size).toBe(TOKYO_SIZE);
   await download(page, /^関東まるごと/, "kanto-all");
-  expect((await opfsFile(page, "tokyo-251124.pmtiles"))?.size).toBe(FIXTURE_SIZE);
+  expect((await opfsFile(page, "tokyo-251124.pmtiles"))?.size).toBe(TOKYO_SIZE);
   expect((await opfsFile(page, ARCHIVE))?.size).toBe(FIXTURE_SIZE);
 
   await page.reload();
@@ -293,4 +294,55 @@ test("the menu folds away and comes back; on the map it starts folded", async ({
   await expect(page.locator("body")).toHaveAttribute("data-view", "select");
   await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
   await expect(page.locator("#panel")).toBeVisible();
+});
+
+/** Source layers drawn at a point, after moving the camera there. */
+async function layersAt(page: Page, lon: number, lat: number, zoom: number) {
+  await page.evaluate(([lon, lat, zoom]) => (window as any).offgridMap.jumpTo({ center: [lon, lat], zoom }), [
+    lon,
+    lat,
+    zoom,
+  ]);
+  await idle(page);
+  return page.evaluate(() => {
+    const m = (window as any).offgridMap;
+    const c = m.project(m.getCenter());
+    return [...new Set(m.queryRenderedFeatures([c.x, c.y]).map((f: any) => f.sourceLayer))].sort();
+  });
+}
+
+const SHINJUKU: [number, number] = [139.7, 35.6925];
+const YOKOHAMA: [number, number] = [139.62, 35.4675];
+
+test("every downloaded region is drawn on the one map", async ({ page }) => {
+  await download(page, /^神奈川県/, "kanagawa");
+  expect(await layersAt(page, ...YOKOHAMA, 12)).toContain("transportation");
+  // Only Kanagawa on the device: Shinjuku is open sea.
+  expect(await layersAt(page, ...SHINJUKU, 12)).toEqual(["water"]);
+
+  await download(page, /^東京都/, "tokyo");
+  // Now both, on the same map, without switching.
+  expect(await layersAt(page, ...SHINJUKU, 12)).toContain("transportation");
+  expect(await layersAt(page, ...YOKOHAMA, 12)).toContain("transportation");
+
+  // The map button only moves the camera; the other region stays drawn.
+  await page.locator("#menu").click();
+  await page.locator('.row[data-region="kanagawa"] button.open').click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanagawa");
+  expect(await layersAt(page, ...SHINJUKU, 12)).toContain("transportation");
+});
+
+test("a deleted region disappears from the map", async ({ page }) => {
+  await download(page, /^神奈川県/, "kanagawa");
+  await download(page, /^東京都/, "tokyo");
+  expect(await layersAt(page, ...YOKOHAMA, 12)).toContain("transportation");
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#menu").click();
+  await page.getByRole("button", { name: /^神奈川県/ }).click();
+  await page.locator("#delete").click();
+  await expect(page.locator("#download")).toBeVisible();
+  await page.locator('.crumbs button', { hasText: "関東" }).click();
+  await page.locator('.row[data-region="tokyo"] button.open').click();
+  expect(await layersAt(page, ...YOKOHAMA, 12)).toEqual(["water"]);
+  expect(await layersAt(page, ...SHINJUKU, 12)).toContain("transportation");
 });

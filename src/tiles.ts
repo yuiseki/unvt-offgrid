@@ -51,3 +51,16 @@ export function worldTileJson(tj: TileJson, sourceUrl: string): TileJson {
     bounds: [-180, -85.051129, 180, 85.051129],
   };
 }
+
+/** [west, south, east, north] of a web-mercator tile, in degrees. */
+export function tileBounds(z: number, x: number, y: number): [number, number, number, number] {
+  const n = 2 ** z;
+  const lon = (i: number) => (i / n) * 360 - 180;
+  const lat = (j: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * j) / n))) * 180) / Math.PI;
+  return [lon(x), lat(y + 1), lon(x + 1), lat(y)];
+}
+
+/** Whether two [west, south, east, north] boxes share any point (edges count). */
+export function overlaps(a: readonly number[], b: readonly number[]): boolean {
+  return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+}

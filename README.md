@@ -36,6 +36,13 @@ download worker streams                    MapLibre -> pmtiles.js -> fetch(Range
   OPFS is answered from that file (206 with `Content-Range`, no ETag). The app
   shell is precached; the style, sprites and a fixed set of glyph ranges are
   cached under `offgrid-assets`.
+- **One map for every region**: the style has a single source,
+  `pmtiles://offgrid-local-N`, which the protocol handler answers from every
+  archive on the device: the first archive whose bounds overlap the tile and
+  that has it. Archives cut from the same planet hold identical copies of the
+  tiles along shared borders (checked on Tokyo/Kanagawa, Tokyo/Chiba and
+  Chiba/Ibaraki at z8, z12 and z14), so the regions join without a seam.
+  Archives from different planet dates would not join cleanly.
 - **The sea around the region**: the archive is cut to the region's polygon, so
   it has no tiles over the surrounding sea. The OpenMapTiles schema has no land
   layer (land is the background colour), so missing tiles would look like land.

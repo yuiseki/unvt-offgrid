@@ -19,8 +19,9 @@ Undecided. Revisit when someone can test on a real iOS device.
 
 ## Not done yet
 
-- Only one region is shown at a time. With two prefectures downloaded, the
-  map of one does not show the other (it is drawn as sea).
+- When regions get newer archives, regions from different planet dates are
+  drawn together and may not line up at their borders. Decide a rule (only
+  overlay archives of the same date, or prefer the newest).
 - Picker cosmetics: the world backdrop is simplified hard (spiky coasts), and
   the simplified prefecture outlines overlap a little around Tokyo Bay.
 - Updates: a new archive (new date in the file name) is a new file; nothing

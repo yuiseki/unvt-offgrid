@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OCEAN_TILE, parsePmtilesUrl, worldTileJson } from "./tiles";
+import { OCEAN_TILE, overlaps, parsePmtilesUrl, tileBounds, worldTileJson } from "./tiles";
 
 describe("OCEAN_TILE", () => {
   it("is the planet's whole-tile ocean polygon (uncompressed MVT with one water layer)", () => {
@@ -43,5 +43,34 @@ describe("worldTileJson", () => {
     expect(tj.bounds).toEqual([-180, -85.051129, 180, 85.051129]);
     expect(tj.tiles).toEqual(["pmtiles://x/{z}/{x}/{y}"]);
     expect(tj.maxzoom).toBe(14);
+  });
+});
+
+describe("tileBounds", () => {
+  it("covers the world at zoom 0", () => {
+    const [w, s, e, n] = tileBounds(0, 0, 0);
+    expect(w).toBe(-180);
+    expect(e).toBe(180);
+    expect(n).toBeCloseTo(85.0511, 3);
+    expect(s).toBeCloseTo(-85.0511, 3);
+  });
+
+  it("puts Shinjuku in its zoom 12 tile", () => {
+    const [w, s, e, n] = tileBounds(12, 3637, 1612);
+    expect(w).toBeLessThan(139.7);
+    expect(e).toBeGreaterThan(139.7);
+    expect(s).toBeLessThan(35.6925);
+    expect(n).toBeGreaterThan(35.6925);
+  });
+});
+
+describe("overlaps", () => {
+  it("is true for boxes that share area and false for ones that do not", () => {
+    expect(overlaps([0, 0, 2, 2], [1, 1, 3, 3])).toBe(true);
+    expect(overlaps([0, 0, 1, 1], [2, 2, 3, 3])).toBe(false);
+  });
+
+  it("counts touching edges as overlapping, so border tiles are not skipped", () => {
+    expect(overlaps([0, 0, 1, 1], [1, 0, 2, 1])).toBe(true);
   });
 });

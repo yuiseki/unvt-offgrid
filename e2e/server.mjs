@@ -5,12 +5,12 @@
 //   /static/openstreetmap/regions/asia/japan/kanto/**.pmtiles
 //                              REGION_FILE (a small stand-in archive)
 //
-// regions.json is rewritten so the archive size matches REGION_FILE.
+// regions.json is rewritten so each archive size matches the file served.
 // POST /__cut?after=N makes the next archive download stop after N bytes,
 // to test resuming. GET /__log returns and clears the request log.
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join, normalize } from "node:path";
+import { dirname, extname, join, normalize } from "node:path";
 
 const PORT = Number(process.env.PORT ?? 8765);
 const DIST = process.env.DIST ?? "dist";
@@ -35,8 +35,13 @@ let cutAfter = null;
 let log = [];
 
 function resolve(pathname) {
-  // Every archive under Kanto (the whole region and each prefecture) is the stand-in.
-  if (pathname.startsWith(REGION_DIR) && pathname.endsWith(".pmtiles")) return REGION_FILE;
+  // Archives under Kanto: e2e/fixtures/NAME-box.pmtiles if there is one for
+  // that prefecture, else the Kanto-wide stand-in.
+  if (pathname.startsWith(REGION_DIR) && pathname.endsWith(".pmtiles")) {
+    const name = pathname.slice(pathname.lastIndexOf("/") + 1).replace(/-\d+\.pmtiles$/, "");
+    const box = join(dirname(REGION_FILE), `${name}-box.pmtiles`);
+    return existsSync(box) ? box : REGION_FILE;
+  }
   const p = normalize(decodeURIComponent(pathname));
   if (p.startsWith("/static/maps/offgrid/")) {
     const rest = p.slice("/static/maps/offgrid/".length) || "index.html";
@@ -70,9 +75,8 @@ createServer((req, res) => {
 
   if (url.pathname.endsWith("/offgrid/regions.json")) {
     const cat = JSON.parse(readFileSync(file, "utf8"));
-    const size = statSync(REGION_FILE).size;
     const walk = (n) => {
-      if (n.pmtiles) n.pmtiles.bytes = size;
+      if (n.pmtiles) n.pmtiles.bytes = statSync(resolve(new URL(n.pmtiles.url, url).pathname)).size;
       (n.children ?? []).forEach(walk);
     };
     walk(cat);
