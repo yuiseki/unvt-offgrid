@@ -143,6 +143,7 @@ test("a downloaded region can be deleted", async ({ page }) => {
   await downloadKanto(page);
   page.once("dialog", (d) => d.accept());
   await page.locator("#menu").click();
+  await page.getByRole("button", { name: /^関東まるごと/ }).click(); // its details
   await page.locator("#delete").click();
   await expect(page.locator("#download")).toBeVisible();
   expect(await opfsFile(page, ARCHIVE)).toBeNull();
@@ -202,11 +203,11 @@ test("two regions can be kept, and the last one opened comes up on start", async
   await expect(page.locator("body")).toHaveAttribute("data-view", "map");
   await expect(page.locator("body")).toHaveAttribute("data-node", "kanto-all");
 
-  // Open Tokyo from the picker; it is what comes up next time.
+  // ☰ on the map goes back to the Kanto list; open Tokyo from its row, and
+  // it is what comes up next time.
   await page.locator("#menu").click();
-  await page.getByRole("button", { name: "関東", exact: true }).click();
-  await page.getByRole("button", { name: /^東京都/ }).click();
-  await page.locator("#open").click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
+  await page.locator('.row[data-region="tokyo"] button.open').click();
   await expect(page.locator("body")).toHaveAttribute("data-node", "tokyo");
   await page.reload();
   await expect(page.locator("body")).toHaveAttribute("data-view", "map");
@@ -221,7 +222,6 @@ test("the picker works offline, prefecture outlines included", async ({ page, co
   await page.reload();
   await expect(page.locator("body")).toHaveAttribute("data-view", "map");
   await page.locator("#menu").click();
-  await page.getByRole("button", { name: "関東", exact: true }).click();
   await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
   await idle(page);
   expect(await pickIds(page)).toHaveLength(7);
@@ -254,7 +254,7 @@ test("tapping a name zooms into that region; the arrow is only on downloadable o
 test("after a download the row offers the map instead of the arrow", async ({ page }) => {
   await download(page, /^千葉県/, "chiba");
   await page.locator("#menu").click();
-  await page.getByRole("button", { name: "関東", exact: true }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
   const row = page.locator('.row[data-region="chiba"]');
   await expect(row.locator("button.dl")).toHaveCount(0);
   await row.locator("button.open").click();
@@ -291,5 +291,6 @@ test("the menu folds away and comes back; on the map it starts folded", async ({
   await expect(menu).toContainText("群馬県");
   await menu.click();
   await expect(page.locator("body")).toHaveAttribute("data-view", "select");
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
   await expect(page.locator("#panel")).toBeVisible();
 });

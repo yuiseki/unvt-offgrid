@@ -22,7 +22,7 @@ download worker streams                    MapLibre -> pmtiles.js -> fetch(Range
   and a list under the ☰ menu (top left, folds away). Tapping a name or an
   outline goes into that region; the ↓ next to a name downloads it in place,
   and becomes 地図 once the region is on the device. On the map, ☰ opens the
-  picker. A child
+  list the region was picked from. A child
   with its parent's outline (the whole of Kanto) is only in the list, so it does
   not cover its siblings on the map. Several regions can be kept; the one
   opened last comes up on start.

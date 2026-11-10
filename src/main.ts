@@ -403,7 +403,9 @@ async function showMap(node: RegionNode) {
   document.body.dataset.node = node.id;
   panel.replaceChildren();
   setMenu(false, node.name);
-  onMenu = () => void showSelection(node.id);
+  // ☰ on the map opens the list the region was picked from, next to its siblings.
+  const path = findPath(catalog, node.id) ?? [catalog];
+  onMenu = () => void showSelection((path[path.length - 2] ?? path[0]).id);
 }
 
 // ---------------------------------------------------------------- start
