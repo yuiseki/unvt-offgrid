@@ -120,7 +120,7 @@ createServer((req, res) => {
     stream.on("end", () => setTimeout(() => res.destroy(), 50));
     return stream.pipe(res, { end: false });
   }
-  if (file === REGION_FILE && slowMs !== null && !m?.[2]) {
+  if (url.pathname.startsWith(REGION_DIR) && slowMs !== null && !m?.[2]) {
     const ms = slowMs;
     slowMs = null;
     const stream = createReadStream(file, { start, end, highWaterMark: 64 * 1024 });

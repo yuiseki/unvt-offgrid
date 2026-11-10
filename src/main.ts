@@ -1,5 +1,5 @@
 import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, StyleSpecification } from "maplibre-gl";
+import type { GeoJSONSource, StyleSpecification, VectorTileSource } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import { PMTiles } from "pmtiles";
 import { ASSET_CACHE, STYLE_PATH, glyphUrls, mapsBase } from "./assets";
@@ -495,7 +495,21 @@ async function download(node: RegionNode) {
   if (!persisted) console.warn("navigator.storage.persist() was not granted; the browser may evict the download.");
   active.delete(node.id);
   if (seq === navSeq) await showMap(node);
+  else if (document.body.dataset.view === "map") await joinMap();
   else rerender();
+}
+
+/**
+ * Add newly downloaded regions to the map on screen without moving the
+ * camera or reloading the style: point its source at the new set.
+ */
+async function joinMap() {
+  if (!(await refreshLocal())) return;
+  for (const [id, src] of Object.entries(map.getStyle().sources)) {
+    if ("url" in src && src.url?.startsWith(`pmtiles://${LOCAL}`)) {
+      map.getSource<VectorTileSource>(id)?.setUrl(`pmtiles://${LOCAL}${localGen}`);
+    }
+  }
 }
 
 async function fetchStyle(): Promise<StyleLike> {

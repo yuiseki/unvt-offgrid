@@ -433,3 +433,22 @@ test("two quick taps in the picker end on the second place, drawn once", async (
   expect(await pickIds(page)).toEqual(["kanto"]);
   expect(errors).toEqual([]);
 });
+
+test("a region that finishes while the map is open joins the map in place", async ({ page, request }) => {
+  await download(page, /^東京都/, "tokyo");
+  await page.locator("#menu").click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
+  await request.post("/__slow?ms=150");
+  await page.locator('.row[data-region="kanagawa"] button.dl').click();
+  await expect(page.locator('.row[data-region="kanagawa"] progress')).toBeVisible();
+  // Back to the map while Kanagawa is still coming in.
+  await page.locator('.row[data-region="tokyo"] button.open').click();
+  await expect(page.locator("body")).toHaveAttribute("data-view", "map");
+  expect(await layersAt(page, ...YOKOHAMA, 12)).toEqual(["water"]);
+  await expect.poll(() => opfsFile(page, "kanagawa-251124.pmtiles"), { timeout: 30_000 }).not.toBeNull();
+  // The user stays on the map, where they were, and Kanagawa is drawn.
+  await expect(page.locator("body")).toHaveAttribute("data-node", "tokyo");
+  await page.evaluate(() => (window as any).offgridMap.jumpTo({ center: [139.62, 35.4675], zoom: 12 }));
+  await expect.poll(async () => layersAt(page, ...YOKOHAMA, 12), { timeout: 10_000 }).toContain("transportation");
+  expect(await page.evaluate(() => (window as any).offgridMap.getZoom())).toBe(12);
+});

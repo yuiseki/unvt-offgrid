@@ -43,6 +43,12 @@ download worker streams                    MapLibre -> pmtiles.js -> fetch(Range
   tiles along shared borders (checked on Tokyo/Kanagawa, Tokyo/Chiba and
   Chiba/Ibaraki at z8, z12 and z14), so the regions join without a seam.
   Archives from different planet dates would not join cleanly.
+- **Downloads outlive the view**: a running download is kept per region, and
+  whichever list shows that region draws its progress and a cancel button.
+  It opens the map at the end only if the user is still where they started
+  it. If they are on the map by then, the new region joins it in place: the
+  source is pointed at the next `offgrid-local-N` with `setUrl`, so neither
+  the camera nor the style is reloaded.
 - **The sea around the region**: the archive is cut to the region's polygon, so
   it has no tiles over the surrounding sea. The OpenMapTiles schema has no land
   layer (land is the background colour), so missing tiles would look like land.
