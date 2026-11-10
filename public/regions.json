@@ -1,0 +1,29 @@
+{
+  "id": "world",
+  "name": "世界",
+  "outline": "geo/world.geojson",
+  "bbox": [-180, -60, 180, 75],
+  "children": [
+    {
+      "id": "japan",
+      "name": "日本",
+      "outline": "geo/japan.geojson",
+      "backdrop": "geo/japan-prefectures.geojson",
+      "bbox": [122.9, 24.0, 146.0, 45.6],
+      "children": [
+        {
+          "id": "kanto",
+          "name": "関東",
+          "outline": "geo/kanto.geojson",
+          "bbox": [138.3, 34.8, 141.0, 37.2],
+          "pmtiles": {
+            "url": "../../openstreetmap/regions/asia/japan/kanto/kanto-251124.pmtiles",
+            "bytes": 294936503,
+            "maxzoom": 14,
+            "osmDate": "2025-11-24"
+          }
+        }
+      ]
+    }
+  ]
+}

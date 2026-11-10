@@ -1,0 +1,23 @@
+{
+  "name": "unvt-offgrid",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Download a region's vector tiles (PMTiles) into the browser's OPFS and view the map offline on a smartphone.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "serve": "node e2e/server.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "maplibre-gl": "^6.17.0",
+    "pmtiles": "^4.5.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
