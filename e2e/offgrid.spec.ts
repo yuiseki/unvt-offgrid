@@ -54,3 +54,97 @@ test("world > Japan > Kanto, download, then the map opens", async ({ page }) => 
   expect(layers).toContain("water");
   expect(layers).toContain("place");
 });
+
+test("after a download the map opens offline, with tiles from OPFS", async ({ page, context }) => {
+  await downloadKanto(page);
+  await idle(page);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+
+  const fromNetwork: string[] = [];
+  const fromOpfs: string[] = [];
+  page.on("response", (r) => {
+    if (!r.url().endsWith(".pmtiles")) return;
+    (r.headers()["x-offgrid"] === "opfs" ? fromOpfs : fromNetwork).push(r.url());
+  });
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.locator("body")).toHaveAttribute("data-view", "map");
+  await idle(page);
+  const layers = await page.evaluate(() =>
+    [...new Set((window as any).offgridMap.queryRenderedFeatures().map((f: any) => f.sourceLayer))].sort(),
+  );
+  expect(layers).toContain("water");
+  expect(layers).toContain("transportation");
+  expect(fromOpfs.length).toBeGreaterThan(0);
+  expect(fromNetwork).toEqual([]);
+});
+
+test("outside the region the missing tiles are drawn as open sea", async ({ page }) => {
+  await downloadKanto(page);
+  await idle(page);
+  // Inland Australia: certainly land, certainly not in the Kanto archive.
+  await page.evaluate(() => (window as any).offgridMap.jumpTo({ center: [134, -25], zoom: 6 }));
+  await idle(page);
+  const water = await page.evaluate(() => {
+    const m = (window as any).offgridMap;
+    const c = m.project(m.getCenter());
+    return m
+      .queryRenderedFeatures([c.x, c.y])
+      .filter((f: any) => f.sourceLayer === "water")
+      .map((f: any) => f.properties.class);
+  });
+  expect(water).toContain("ocean");
+});
+
+test("an interrupted download resumes where it stopped", async ({ page, request }) => {
+  await request.post("/__cut?after=400000");
+  await page.goto("./");
+  await page.getByRole("button", { name: /^日本/ }).click();
+  await page.getByRole("button", { name: /^関東/ }).click();
+  await page.locator("#download").click();
+  await expect(page.locator("#status")).toContainText("失敗", { timeout: 20_000 });
+  const part = await opfsFile(page, ARCHIVE + ".part");
+  expect(part?.size).toBe(400000);
+  expect(await opfsFile(page, ARCHIVE)).toBeNull();
+
+  await request.get("/__log");
+  await page.getByRole("button", { name: "戻る" }).click();
+  await page.locator("#download").click(); // now "続きをダウンロード"
+  await expect(page.locator("body")).toHaveAttribute("data-view", "map", { timeout: 30_000 });
+  const log = (await (await request.get("/__log")).json()) as { path: string; range: string | null }[];
+  const archiveRequests = log.filter((r) => r.path.endsWith(ARCHIVE));
+  expect(archiveRequests[0]?.range).toBe("bytes=400000-");
+  expect(await opfsFile(page, ARCHIVE)).toEqual({ size: FIXTURE_SIZE, sha256: FIXTURE_SHA256 });
+});
+
+test("a downloaded region can be deleted", async ({ page }) => {
+  await downloadKanto(page);
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#regions").click();
+  await page.locator("#delete").click();
+  await expect(page.locator("#download")).toBeVisible();
+  expect(await opfsFile(page, ARCHIVE)).toBeNull();
+});
+
+test("the download does not start when the quota is too small", async ({ page }) => {
+  await page.addInitScript(() => {
+    navigator.storage.estimate = async () => ({ quota: 1000, usage: 0 });
+  });
+  await page.goto("./");
+  await page.getByRole("button", { name: /^日本/ }).click();
+  await page.getByRole("button", { name: /^関東/ }).click();
+  await page.locator("#download").click();
+  await expect(page.locator("#status")).toContainText("空き容量が足りません");
+  expect(await opfsFile(page, ARCHIVE + ".part")).toBeNull();
+});
+
+test("Safari gets a warning about the seven-day eviction", async ({ browser }) => {
+  const ctx = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1",
+  });
+  const page = await ctx.newPage();
+  await page.goto("./");
+  await expect(page.locator("#warnings")).toContainText("7日間");
+  await ctx.close();
+});
