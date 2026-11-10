@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Download a region's vector tiles (PMTiles) into the browser's OPFS and view the map offline on a smartphone.",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",

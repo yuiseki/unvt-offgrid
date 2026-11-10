@@ -103,8 +103,13 @@ scripts/build-region.sh planet.pmtiles regions/kanto.geojson kanto-251124.pmtile
 scripts/build-kanto-prefectures.sh /path/to/natural-earth-10m-shapefiles planet.pmtiles OUTDIR 251124
 ```
 
-Natural Earth is public domain. The tiles are OpenMapTiles schema from
-OpenStreetMap data, © OpenStreetMap contributors, ODbL.
+## License
+
+The code is licensed under the [Apache License 2.0](LICENSE).
+
+The data it handles has its own terms: the map tiles are OpenMapTiles schema
+built from OpenStreetMap data, © OpenStreetMap contributors, under the ODbL;
+Natural Earth (the outlines in `public/geo/` and `regions/`) is public domain.
 
 ## Deploy
 
