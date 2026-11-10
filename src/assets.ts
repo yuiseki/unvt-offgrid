@@ -50,7 +50,9 @@ export function assetUrls(appUrl: string): string[] {
  * (recorded by e2e/record-glyphs.spec.ts); fetching every range of the three
  * font stacks would be about 100 MB.
  */
-export const GLYPH_RANGES = ["0-255"];
+// 2026-11-10: Noto Sans Regular used all five, Bold and Italic only the first two;
+// all five for every stack is 1.2 MB.
+export const GLYPH_RANGES = ["0-255", "256-511", "8192-8447", "8448-8703", "9216-9471"];
 
 export function glyphUrls(appUrl: string, fontstacks: string[]): string[] {
   const base = mapsBase(appUrl);
