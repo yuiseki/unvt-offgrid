@@ -7,7 +7,9 @@
 //
 // regions.json is rewritten so each archive size matches the file served.
 // POST /__cut?after=N makes the next archive download stop after N bytes,
-// to test resuming. GET /__log returns and clears the request log.
+// to test resuming. POST /__slow?ms=M sends the next archive download in
+// 64 kB pieces, M ms apart, to test what happens while one is running.
+// GET /__log returns and clears the request log.
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, extname, join, normalize } from "node:path";
@@ -36,6 +38,7 @@ const TYPES = {
 };
 
 let cutAfter = null;
+let slowMs = null;
 let log = [];
 
 function resolve(pathname) {
@@ -59,6 +62,10 @@ createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   if (url.pathname === "/__cut") {
     cutAfter = Number(url.searchParams.get("after"));
+    return res.end("ok");
+  }
+  if (url.pathname === "/__slow") {
+    slowMs = Number(url.searchParams.get("ms"));
     return res.end("ok");
   }
   if (url.pathname === "/__log") {
@@ -112,6 +119,19 @@ createServer((req, res) => {
     const stream = createReadStream(file, { start, end: Math.min(end, start + n - 1) });
     stream.on("end", () => setTimeout(() => res.destroy(), 50));
     return stream.pipe(res, { end: false });
+  }
+  if (file === REGION_FILE && slowMs !== null && !m?.[2]) {
+    const ms = slowMs;
+    slowMs = null;
+    const stream = createReadStream(file, { start, end, highWaterMark: 64 * 1024 });
+    stream.on("data", (chunk) => {
+      res.write(chunk);
+      stream.pause();
+      setTimeout(() => stream.resume(), ms);
+    });
+    stream.on("end", () => res.end());
+    res.on("close", () => stream.destroy());
+    return;
   }
   createReadStream(file, { start, end }).pipe(res);
 }).listen(PORT, () => console.log(`e2e server on http://localhost:${PORT}/static/maps/offgrid/`));

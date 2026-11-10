@@ -131,7 +131,6 @@ test("an interrupted download resumes where it stopped", async ({ page, request 
   expect(await opfsFile(page, ARCHIVE)).toBeNull();
 
   await request.get("/__log");
-  await page.getByRole("button", { name: "戻る" }).click();
   await page.locator("#download").click(); // now "続きをダウンロード"
   await expect(page.locator("body")).toHaveAttribute("data-view", "map", { timeout: 30_000 });
   const log = (await (await request.get("/__log")).json()) as { path: string; range: string | null }[];
@@ -345,4 +344,92 @@ test("a deleted region disappears from the map", async ({ page }) => {
   await page.locator('.row[data-region="tokyo"] button.open').click();
   expect(await layersAt(page, ...YOKOHAMA, 12)).toEqual(["water"]);
   expect(await layersAt(page, ...SHINJUKU, 12)).toContain("transportation");
+});
+
+/** From the world level to the Kanto list. */
+async function openKanto(page: Page) {
+  await page.goto("./");
+  await page.getByRole("button", { name: /^日本/ }).click();
+  await page.getByRole("button", { name: /^関東/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
+  await expect(page.locator(".row")).toHaveCount(8); // the list is built after data-node is set
+}
+
+test("leaving the list during a download keeps it in view, and it does not pull the user to the map", async ({ page, request }) => {
+  await request.post("/__slow?ms=150");
+  await openKanto(page);
+  const row = page.locator('.row[data-region="kanto-all"]');
+  await row.locator("button.dl").click();
+  await expect(row.locator("progress")).toBeVisible();
+  await page.locator(".crumbs button", { hasText: "日本" }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "japan");
+  await page.getByRole("button", { name: /^関東/ }).click();
+  // Back in the list, the running download is still shown, with its cancel button.
+  await expect(row.locator("progress")).toBeVisible();
+  await expect(row.getByRole("button", { name: /中断/ })).toBeVisible();
+  // When it finishes the user stays where they are; the row now offers the map.
+  await expect(row.locator("button.open")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("body")).toHaveAttribute("data-view", "select");
+  expect(await opfsFile(page, ARCHIVE)).toEqual({ size: FIXTURE_SIZE, sha256: FIXTURE_SHA256 });
+});
+
+test("a running download can be cancelled from its row", async ({ page, request }) => {
+  await request.post("/__slow?ms=150");
+  await openKanto(page);
+  const row = page.locator('.row[data-region="kanto-all"]');
+  await row.locator("button.dl").click();
+  await expect(row.locator("progress")).toBeVisible();
+  await row.getByRole("button", { name: /中断/ }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-node", "kanto");
+  await expect(row.locator("button.dl")).toBeVisible();
+  await expect(row.locator("progress")).toHaveCount(0);
+  expect(await opfsFile(page, ARCHIVE)).toBeNull();
+});
+
+test("tapping the arrow twice starts one download", async ({ page, request }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  // Count the download workers the page starts.
+  await page.addInitScript(() => {
+    const W = window.Worker;
+    (window as any).downloadWorkers = 0;
+    window.Worker = class extends W {
+      constructor(url: string | URL, opts?: WorkerOptions) {
+        super(url, opts);
+        if (String(url).includes("download-worker")) (window as any).downloadWorkers++;
+      }
+    };
+  });
+  await openKanto(page);
+  await request.get("/__log");
+  // Both clicks land before the first has done anything.
+  await page.evaluate(() => {
+    const b = document.querySelector<HTMLButtonElement>('.row[data-region="kanto-all"] button.dl')!;
+    b.click();
+    b.click();
+  });
+  await expect(page.locator("body")).toHaveAttribute("data-view", "map", { timeout: 30_000 });
+  const log = (await (await request.get("/__log")).json()) as { path: string; range: string | null }[];
+  // pmtiles.js reads the finished archive in ranges; the downloads are the requests without one.
+  expect(log.filter((r) => r.path.endsWith(ARCHIVE) && r.range === null)).toHaveLength(1);
+  expect(await page.evaluate(() => (window as any).downloadWorkers)).toBe(1);
+  expect(await opfsFile(page, ARCHIVE)).toEqual({ size: FIXTURE_SIZE, sha256: FIXTURE_SHA256 });
+  expect(errors).toEqual([]);
+});
+
+test("two quick taps in the picker end on the second place, drawn once", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await openKanto(page);
+  await page.evaluate(() => {
+    document.querySelector<HTMLButtonElement>('.row[data-region="tokyo"] button.name')!.click();
+    [...document.querySelectorAll<HTMLButtonElement>(".crumbs button")].find((b) => b.textContent === "日本")!.click();
+  });
+  await expect(page.locator("body")).toHaveAttribute("data-node", "japan");
+  await expect(page.locator(".crumbs strong")).toHaveText("日本");
+  await expect(page.locator(".row")).toHaveCount(1); // 関東 only
+  await idle(page);
+  expect(await pickIds(page)).toEqual(["kanto"]);
+  expect(errors).toEqual([]);
 });

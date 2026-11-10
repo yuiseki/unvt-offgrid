@@ -175,6 +175,14 @@ function createMap() {
 }
 
 let catalog: RegionNode;
+
+/**
+ * Bumped by every move to another view. A view that is still being built
+ * when the user moves on (taps are faster than fetches) checks it after each
+ * await and gives up, instead of drawing over the newer view.
+ */
+let navSeq = 0;
+
 let pickHandler: ((e: maplibregl.MapLayerMouseEvent) => void) | null = null;
 
 function setPickHandler(h: ((e: maplibregl.MapLayerMouseEvent) => void) | null) {
@@ -184,6 +192,7 @@ function setPickHandler(h: ((e: maplibregl.MapLayerMouseEvent) => void) | null) 
 }
 
 async function showSelection(id: string) {
+  const seq = ++navSeq;
   const path = findPath(catalog, id) ?? [catalog];
   const node = path[path.length - 1];
   // Arriving from the map (or at start) the list is wanted; moving within
@@ -198,6 +207,7 @@ async function showSelection(id: string) {
   };
   map.setStyle(SELECT_STYLE);
   await new Promise<void>((r) => (map.isStyleLoaded() ? r() : map.once("style.load", () => r())));
+  if (seq !== navSeq) return;
 
   const rel = (p: string) => new URL(p, CATALOG_URL).href;
   map.addSource("world", { type: "geojson", data: rel(catalog.outline!) });
@@ -220,20 +230,13 @@ async function showSelection(id: string) {
         return gj.features.map((f) => ({ ...f, properties: { id: c.id } }));
       }),
   );
+  if (seq !== navSeq) return;
   (map.getSource("pick") as GeoJSONSource).setData({ type: "FeatureCollection", features: features.flat() });
   setPickHandler((e) => {
     const picked = e.features?.[0]?.properties?.id as string | undefined;
     if (picked && picked !== node.id) void showSelection(picked);
   });
-  panel.replaceChildren(breadcrumb(path));
-  if (node.pmtiles) {
-    panel.append(await leafPanel(node));
-  } else {
-    const list = document.createElement("ul");
-    list.className = "children";
-    for (const c of children) list.append(await row(c, node));
-    panel.append(list);
-  }
+  if (!(await renderPanel(path, seq))) return;
   // Frame the region in the part of the map the panel does not cover.
   if (node.bbox) {
     const below = document.body.dataset.menu === "open" ? panel : menu;
@@ -246,11 +249,38 @@ async function showSelection(id: string) {
 }
 
 /**
+ * Fill the panel for the last node of `path`. Built off the page and put in
+ * only if the user has not moved on meanwhile; returns whether it was.
+ */
+async function renderPanel(path: RegionNode[], seq: number): Promise<boolean> {
+  const node = path[path.length - 1];
+  const parts: HTMLElement[] = [breadcrumb(path)];
+  if (node.pmtiles) {
+    parts.push(await leafPanel(node));
+  } else {
+    const list = document.createElement("ul");
+    list.className = "children";
+    for (const c of node.children ?? []) list.append(await row(c));
+    parts.push(list);
+  }
+  if (seq !== navSeq) return false;
+  panel.replaceChildren(...parts);
+  return true;
+}
+
+/** Redraw the picker's panel where the user is, without moving the map. */
+function rerender() {
+  if (document.body.dataset.view !== "select") return;
+  const path = findPath(catalog, document.body.dataset.node ?? "");
+  if (path) void renderPanel(path, navSeq);
+}
+
+/**
  * One line of the list: the name (tap: go into that region) and, for a region
  * with an archive, an arrow that downloads it right there, or a map button
  * once it is on the device.
  */
-async function row(c: RegionNode, parent: RegionNode): Promise<HTMLElement> {
+async function row(c: RegionNode): Promise<HTMLElement> {
   const li = document.createElement("li");
   li.className = "row";
   li.dataset.region = c.id;
@@ -270,7 +300,9 @@ async function row(c: RegionNode, parent: RegionNode): Promise<HTMLElement> {
   status.className = "status";
   li.append(name, actions, status);
   if (c.pmtiles) {
-    if (await isDownloaded(c)) {
+    if (active.has(c.id)) {
+      showProgress(c, li, actions, status);
+    } else if (await isDownloaded(c)) {
       const open = document.createElement("button");
       open.className = "open";
       open.textContent = "地図";
@@ -284,8 +316,12 @@ async function row(c: RegionNode, parent: RegionNode): Promise<HTMLElement> {
       dl.textContent = "↓";
       dl.title = part > 0 ? `続きをダウンロード (${mb(part)} まで保存済み)` : "ダウンロード";
       dl.setAttribute("aria-label", `${dl.title}: ${c.name}`);
-      dl.onclick = () => void download(c, li, status, parent.id);
+      dl.onclick = () => {
+        dl.disabled = true;
+        void download(c);
+      };
       actions.append(dl);
+      showFailure(c, status);
     }
   }
   return li;
@@ -333,7 +369,9 @@ async function leafPanel(node: RegionNode): Promise<HTMLElement> {
     return b;
   };
 
-  if (await isDownloaded(node)) {
+  if (active.has(node.id)) {
+    showProgress(node, box, actions, status);
+  } else if (await isDownloaded(node)) {
     status.textContent = "ダウンロード済み。オフラインで見られます。";
     button("地図を開く", "open", () => void showMap(node));
     button("削除", "delete", async () => {
@@ -344,67 +382,120 @@ async function leafPanel(node: RegionNode): Promise<HTMLElement> {
   } else {
     const part = (await storedSize(opfsName(archiveUrl(node)) + PART_SUFFIX)) ?? 0;
     if (part > 0) status.textContent = `途中まで (${mb(part)}) 保存されています。続きから再開します。`;
-    button(part > 0 ? "続きをダウンロード" : "ダウンロード", "download", () => void download(node, box, status, node.id));
+    const b = button(part > 0 ? "続きをダウンロード" : "ダウンロード", "download", () => {
+      b.disabled = true;
+      void download(node);
+    });
+    showFailure(node, status);
   }
   return box;
 }
 
-/**
- * Download `node` into OPFS, showing progress inside `box` (its `.actions`
- * holds the buttons) and `status`. Cancel or failure returns to `backTo`.
- */
-async function download(node: RegionNode, box: HTMLElement, status: HTMLElement, backTo: string) {
-  const info = node.pmtiles!;
-  const url = archiveUrl(node);
-  const part = (await storedSize(opfsName(url) + PART_SUFFIX)) ?? 0;
-  const need = info.bytes - part;
-  const est = await navigator.storage.estimate();
-  const free = (est.quota ?? 0) - (est.usage ?? 0);
-  if (free < need * 1.02) {
-    status.textContent = `空き容量が足りません。あと ${mb(need)} 必要ですが、このブラウザで使えるのは ${mb(free)} です。`;
-    status.className = "error";
-    return;
-  }
-  const persisted = await navigator.storage.persist();
-  box.querySelector(".actions")?.replaceChildren();
+/** A running download, drawn into whichever view shows its region. */
+function showProgress(node: RegionNode, box: HTMLElement, actions: HTMLElement, status: HTMLElement) {
+  const d = active.get(node.id)!;
   const bar = document.createElement("progress");
-  bar.max = info.bytes;
-  bar.value = part;
+  bar.max = d.total;
+  bar.value = d.received;
+  bar.dataset.progress = node.id;
+  status.dataset.progressText = node.id;
+  status.textContent = d.text;
   box.append(bar);
   const cancel = document.createElement("button");
   cancel.className = "cancel";
   cancel.textContent = "中断";
-  box.querySelector(".actions")?.append(cancel);
+  cancel.setAttribute("aria-label", `中断: ${node.name}`);
+  cancel.onclick = () => d.cancel();
+  actions.append(cancel);
+}
 
-  await regionsDir(true);
-  const worker = new Worker(new URL(`./${__FILES__.downloadWorker}`, APP_URL));
-  cancel.onclick = () => {
+function showFailure(node: RegionNode, status: HTMLElement) {
+  const message = failed.get(node.id);
+  if (!message) return;
+  status.textContent = message;
+  status.className = "error";
+}
+
+/** Downloads under way, by region id. They outlive the view that started them. */
+interface ActiveDownload {
+  received: number;
+  total: number;
+  text: string;
+  cancel: () => void;
+}
+const active = new Map<string, ActiveDownload>();
+/** The last failure per region, shown until the next attempt. */
+const failed = new Map<string, string>();
+
+function updateProgress(id: string) {
+  const d = active.get(id);
+  if (!d) return;
+  for (const bar of document.querySelectorAll<HTMLProgressElement>(`progress[data-progress="${id}"]`)) bar.value = d.received;
+  for (const el of document.querySelectorAll<HTMLElement>(`[data-progress-text="${id}"]`)) el.textContent = d.text;
+}
+
+/**
+ * Download `node` into OPFS. Progress is drawn by whichever view shows the
+ * region (see showProgress). If the user is still where they started it, the
+ * map opens at the end; if they have moved on, they stay where they are.
+ */
+async function download(node: RegionNode) {
+  if (active.has(node.id)) return;
+  const info = node.pmtiles!;
+  const url = archiveUrl(node);
+  const seq = navSeq;
+  let stop: () => void = () => undefined;
+  const d: ActiveDownload = { received: 0, total: info.bytes, text: "", cancel: () => stop() };
+  active.set(node.id, d);
+  failed.delete(node.id);
+  let result: DownloadEvent | { type: "cancelled" };
+  let persisted = false;
+  try {
+    d.received = (await storedSize(opfsName(url) + PART_SUFFIX)) ?? 0;
+    const need = info.bytes - d.received;
+    const est = await navigator.storage.estimate();
+    const free = (est.quota ?? 0) - (est.usage ?? 0);
+    if (free < need * 1.02) {
+      throw new Error(`空き容量が足りません。あと ${mb(need)} 必要ですが、このブラウザで使えるのは ${mb(free)} です。`);
+    }
+    persisted = await navigator.storage.persist();
+    await regionsDir(true);
+    d.text = `${mb(d.received)} / ${mb(info.bytes)}`;
+    const worker = new Worker(new URL(`./${__FILES__.downloadWorker}`, APP_URL));
+    result = await new Promise((resolve) => {
+      stop = () => resolve({ type: "cancelled" });
+      worker.onmessage = (e: MessageEvent<DownloadEvent>) => {
+        if (e.data.type === "progress") {
+          d.received = e.data.received;
+          d.text = `${mb(e.data.received)} / ${mb(e.data.total)}`;
+          updateProgress(node.id);
+        } else resolve(e.data);
+      };
+      worker.onerror = (e) => resolve({ type: "error", message: `ダウンロードに失敗しました: ${e.message}` });
+      worker.postMessage({ type: "start", url, bytes: info.bytes } satisfies DownloadRequest);
+      rerender();
+    });
     worker.terminate();
-    void showSelection(backTo);
-  };
-  const result = await new Promise<DownloadEvent>((resolve) => {
-    worker.onmessage = (e: MessageEvent<DownloadEvent>) => {
-      if (e.data.type === "progress") {
-        bar.value = e.data.received;
-        status.textContent = `${mb(e.data.received)} / ${mb(e.data.total)}`;
-      } else resolve(e.data);
-    };
-    worker.onerror = (e) => resolve({ type: "error", message: e.message });
-    worker.postMessage({ type: "start", url, bytes: info.bytes } satisfies DownloadRequest);
-  });
-  worker.terminate();
-  if (result.type === "error") {
-    status.textContent = `ダウンロードに失敗しました: ${result.message}`;
-    status.className = "error";
-    bar.remove();
-    cancel.textContent = "戻る";
-    cancel.onclick = () => void showSelection(backTo);
+    if (result.type === "error" && !result.message.startsWith("ダウンロードに失敗")) {
+      result = { type: "error", message: `ダウンロードに失敗しました: ${result.message}` };
+    }
+  } catch (e) {
+    result = { type: "error", message: e instanceof Error ? e.message : String(e) };
+  }
+  if (result.type !== "done") {
+    active.delete(node.id);
+    if (result.type === "error") failed.set(node.id, result.message);
+    rerender();
     return;
   }
-  status.textContent = "文字の形のデータを保存しています…";
+  d.received = info.bytes;
+  d.text = "文字の形のデータを保存しています…";
+  updateProgress(node.id);
   await prefetchGlyphs();
   if (!persisted) console.warn("navigator.storage.persist() was not granted; the browser may evict the download.");
-  await showMap(node);
+  active.delete(node.id);
+  if (seq === navSeq) await showMap(node);
+  else rerender();
 }
 
 async function fetchStyle(): Promise<StyleLike> {
@@ -440,17 +531,20 @@ function lastOpened(): string | null {
 }
 
 async function showMap(node: RegionNode) {
+  const seq = ++navSeq;
   setPickHandler(null);
   rememberLast(node.id);
   await refreshLocal();
   // Every region on the device, on one map; `node` only places the camera.
   const style = offlineStyle(await fetchStyle(), `${LOCAL}${localGen}`, MAPS_BASE);
+  if (seq !== navSeq) return;
   const loaded = new Promise<void>((r) => map.once("style.load", () => r()));
   map.setStyle(style as unknown as StyleSpecification);
   if (node.bbox) map.fitBounds(node.bbox as [number, number, number, number], { padding: 8, duration: 0 });
   // Mark the view only once the region's style is in: until then the map
   // still holds the picker's style, which is already "loaded".
   await loaded;
+  if (seq !== navSeq) return;
   document.body.dataset.view = "map";
   document.body.dataset.node = node.id;
   panel.replaceChildren();
