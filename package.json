@@ -6,13 +6,14 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "e2e": "playwright test",
     "serve": "node e2e/server.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
     "maplibre-gl": "^6.17.0",

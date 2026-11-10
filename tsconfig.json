@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "lib": ["es2022", "dom", "dom.iterable"] },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/sw.ts", "src/download-worker.ts", "src/**/*.test.ts"]
+}
