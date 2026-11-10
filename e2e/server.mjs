@@ -18,13 +18,13 @@ const MAPS_DIR = process.env.MAPS_DIR;
 const REGION_FILE = process.env.REGION_FILE ?? "e2e/fixtures/kanto-z6.pmtiles";
 const REGION_PATH = "/static/openstreetmap/regions/asia/japan/kanto/kanto-251124.pmtiles";
 
+// Same as the production nginx, which has no entry for .mjs (served as
+// application/octet-stream, and a module worker with that type will not load).
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript",
-  ".mjs": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",
-  ".geojson": "application/geo+json",
   ".png": "image/png",
   ".pbf": "application/x-protobuf",
   ".pmtiles": "application/octet-stream",

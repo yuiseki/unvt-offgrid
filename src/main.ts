@@ -10,7 +10,7 @@ import { fontstacks, offlineStyle, type StyleLike } from "./style";
 import { OCEAN_TILE, parsePmtilesUrl, worldTileJson, type TileJson } from "./tiles";
 
 // maplibre-gl v6 cannot find its worker from inside a bundle.
-maplibregl.setWorkerUrl(new URL("./maplibre-gl-worker.mjs", location.href).href);
+maplibregl.setWorkerUrl(new URL("./maplibre-gl-worker.js", location.href).href);
 
 const APP_URL = new URL("./", location.href).href;
 const CATALOG_URL = new URL("./regions.json", APP_URL).href;

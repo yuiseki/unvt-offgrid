@@ -12,7 +12,7 @@ export const SHELL_FILES = [
   "./main.js",
   "./main.css",
   "./download-worker.js",
-  "./maplibre-gl-worker.mjs",
+  "./maplibre-gl-worker.js",
   "./regions.json",
   "./geo/world.geojson",
   "./geo/japan.geojson",

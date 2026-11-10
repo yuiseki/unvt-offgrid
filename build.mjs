@@ -14,7 +14,9 @@ const version = (() => {
 rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist");
 cpSync("public", "dist", { recursive: true });
-cpSync("node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs", "dist/maplibre-gl-worker.mjs");
+// Shipped as .js: nginx serves .mjs as application/octet-stream, and a module
+// worker with a non-JavaScript type is refused.
+cpSync("node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs", "dist/maplibre-gl-worker.js");
 writeFileSync(
   "dist/main.css",
   readFileSync("node_modules/maplibre-gl/dist/maplibre-gl.css", "utf8") + "\n" + readFileSync("src/app.css", "utf8"),
