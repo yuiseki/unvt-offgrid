@@ -4,7 +4,7 @@ Download a region's vector tiles into a smartphone browser while online, then
 use the map offline. The region is one PMTiles archive cut from a planet
 archive; it is stored in the browser's Origin Private File System (OPFS).
 
-Live: https://z.yuiseki.net/static/maps/offgrid/ (PoC: only World > Japan > Kanto)
+Live: https://z.yuiseki.net/static/maps/offgrid/ (PoC: World > Japan > Kanto, then the whole of Kanto or one of its seven prefectures)
 
 ## How it works
 
@@ -19,7 +19,10 @@ download worker streams                    MapLibre -> pmtiles.js -> fetch(Range
 ```
 
 - **Region picker** (`src/main.ts`): Natural Earth outlines drawn with MapLibre,
-  tap or press a button to go down the tree in `public/regions.json`.
+  tap or press a button to go down the tree in `public/regions.json`. A child
+  with its parent's outline (the whole of Kanto) is only in the list, so it does
+  not cover its siblings on the map. Several regions can be kept; the one
+  opened last comes up on start.
 - **Download** (`src/download-worker.ts`): a dedicated worker writes the
   archive in place through `createSyncAccessHandle()` into `regions/NAME.part`,
   and resumes an interrupted download with `Range: bytes=N-`. Only a complete

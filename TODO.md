@@ -19,9 +19,10 @@ Undecided. Revisit when someone can test on a real iOS device.
 
 ## Not done yet
 
-- The seven Kanto prefecture archives are built and published under
-  `.../japan/kanto/prefectures/` but are not in `regions.json`, so the app
-  does not offer them.
+- Only one region is shown at a time. With two prefectures downloaded, the
+  map of one does not show the other (it is drawn as sea).
+- Picker cosmetics: the world backdrop is simplified hard (spiky coasts), and
+  the simplified prefecture outlines overlap a little around Tokyo Bay.
 - Updates: a new archive (new date in the file name) is a new file; nothing
   yet tells the user that a newer version exists or removes the old one.
 - Build regions from the newer regional `.osm.pbf` (e.g. kanto-260906) with
