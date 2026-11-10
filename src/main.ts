@@ -21,6 +21,21 @@ const MAPS_BASE = mapsBase(APP_URL);
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const panel = $<HTMLDivElement>("panel");
+const menu = $<HTMLButtonElement>("menu");
+
+/** Fold or unfold the panel. The ☰ button shows where the user is. */
+function setMenu(open: boolean, label?: string) {
+  document.body.dataset.menu = open ? "open" : "closed";
+  menu.setAttribute("aria-expanded", String(open));
+  if (label !== undefined) menu.querySelector(".label")!.textContent = label;
+}
+
+/** Whether the user folded the list while picking a region. */
+let pickerFolded = false;
+
+/** What ☰ does: on the map it opens the picker, in the picker it folds the list. */
+let onMenu: () => void = () => undefined;
+menu.onclick = () => onMenu();
 
 // ---------------------------------------------------------------- tiles
 
@@ -121,8 +136,16 @@ function setPickHandler(h: ((e: maplibregl.MapLayerMouseEvent) => void) | null) 
 async function showSelection(id: string) {
   const path = findPath(catalog, id) ?? [catalog];
   const node = path[path.length - 1];
+  // Arriving from the map (or at start) the list is wanted; moving within
+  // the picker, keep it folded or unfolded as the user left it.
+  if (document.body.dataset.view !== "select") pickerFolded = false;
   document.body.dataset.view = "select";
   document.body.dataset.node = node.id;
+  setMenu(!pickerFolded, node.name);
+  onMenu = () => {
+    pickerFolded = !pickerFolded;
+    setMenu(!pickerFolded);
+  };
   map.setStyle(SELECT_STYLE);
   await new Promise<void>((r) => (map.isStyleLoaded() ? r() : map.once("style.load", () => r())));
 
@@ -152,31 +175,70 @@ async function showSelection(id: string) {
     const picked = e.features?.[0]?.properties?.id as string | undefined;
     if (picked && picked !== node.id) void showSelection(picked);
   });
-  if (node.bbox) map.fitBounds(node.bbox as [number, number, number, number], { padding: 24, duration: 0 });
-
   panel.replaceChildren(breadcrumb(path));
   if (node.pmtiles) {
     panel.append(await leafPanel(node));
   } else {
     const list = document.createElement("ul");
     list.className = "children";
-    for (const c of children) {
-      const li = document.createElement("li");
-      const b = document.createElement("button");
-      b.textContent = c.name;
-      b.dataset.region = c.id;
-      const sizes = leaves(c).map((l) => l.pmtiles!.bytes);
-      if (sizes.length) {
-        const s = document.createElement("small");
-        s.textContent = ` ${mb(sizes.reduce((a, n) => a + n, 0))}`;
-        b.append(s);
-      }
-      b.onclick = () => void showSelection(c.id);
-      li.append(b);
-      list.append(li);
-    }
+    for (const c of children) list.append(await row(c, node));
     panel.append(list);
   }
+  // Frame the region in the part of the map the panel does not cover.
+  if (node.bbox) {
+    const below = document.body.dataset.menu === "open" ? panel : menu;
+    const top = Math.min(below.getBoundingClientRect().bottom + 16, window.innerHeight * 0.6);
+    map.fitBounds(node.bbox as [number, number, number, number], {
+      padding: { top, bottom: 24, left: 24, right: 24 },
+      duration: 0,
+    });
+  }
+}
+
+/**
+ * One line of the list: the name (tap: go into that region) and, for a region
+ * with an archive, an arrow that downloads it right there, or a map button
+ * once it is on the device.
+ */
+async function row(c: RegionNode, parent: RegionNode): Promise<HTMLElement> {
+  const li = document.createElement("li");
+  li.className = "row";
+  li.dataset.region = c.id;
+  const name = document.createElement("button");
+  name.className = "name";
+  name.textContent = c.name;
+  const sizes = leaves(c).map((l) => l.pmtiles!.bytes);
+  if (sizes.length) {
+    const small = document.createElement("small");
+    small.textContent = ` ${mb(sizes.reduce((a, n) => a + n, 0))}`;
+    name.append(small);
+  }
+  name.onclick = () => void showSelection(c.id);
+  const actions = document.createElement("span");
+  actions.className = "actions";
+  const status = document.createElement("span");
+  status.className = "status";
+  li.append(name, actions, status);
+  if (c.pmtiles) {
+    if (await isDownloaded(c)) {
+      const open = document.createElement("button");
+      open.className = "open";
+      open.textContent = "地図";
+      open.setAttribute("aria-label", `地図を開く: ${c.name}`);
+      open.onclick = () => void showMap(c);
+      actions.append(open);
+    } else {
+      const part = (await storedSize(opfsName(archiveUrl(c)) + PART_SUFFIX)) ?? 0;
+      const dl = document.createElement("button");
+      dl.className = "dl";
+      dl.textContent = "↓";
+      dl.title = part > 0 ? `続きをダウンロード (${mb(part)} まで保存済み)` : "ダウンロード";
+      dl.setAttribute("aria-label", `${dl.title}: ${c.name}`);
+      dl.onclick = () => void download(c, li, status, parent.id);
+      actions.append(dl);
+    }
+  }
+  return li;
 }
 
 function breadcrumb(path: RegionNode[]): HTMLElement {
@@ -232,12 +294,16 @@ async function leafPanel(node: RegionNode): Promise<HTMLElement> {
   } else {
     const part = (await storedSize(opfsName(archiveUrl(node)) + PART_SUFFIX)) ?? 0;
     if (part > 0) status.textContent = `途中まで (${mb(part)}) 保存されています。続きから再開します。`;
-    button(part > 0 ? "続きをダウンロード" : "ダウンロード", "download", () => void download(node, box, status));
+    button(part > 0 ? "続きをダウンロード" : "ダウンロード", "download", () => void download(node, box, status, node.id));
   }
   return box;
 }
 
-async function download(node: RegionNode, box: HTMLElement, status: HTMLElement) {
+/**
+ * Download `node` into OPFS, showing progress inside `box` (its `.actions`
+ * holds the buttons) and `status`. Cancel or failure returns to `backTo`.
+ */
+async function download(node: RegionNode, box: HTMLElement, status: HTMLElement, backTo: string) {
   const info = node.pmtiles!;
   const url = archiveUrl(node);
   const part = (await storedSize(opfsName(url) + PART_SUFFIX)) ?? 0;
@@ -256,6 +322,7 @@ async function download(node: RegionNode, box: HTMLElement, status: HTMLElement)
   bar.value = part;
   box.append(bar);
   const cancel = document.createElement("button");
+  cancel.className = "cancel";
   cancel.textContent = "中断";
   box.querySelector(".actions")?.append(cancel);
 
@@ -263,7 +330,7 @@ async function download(node: RegionNode, box: HTMLElement, status: HTMLElement)
   const worker = new Worker(new URL(`./${__FILES__.downloadWorker}`, APP_URL));
   cancel.onclick = () => {
     worker.terminate();
-    void showSelection(node.id);
+    void showSelection(backTo);
   };
   const result = await new Promise<DownloadEvent>((resolve) => {
     worker.onmessage = (e: MessageEvent<DownloadEvent>) => {
@@ -281,7 +348,7 @@ async function download(node: RegionNode, box: HTMLElement, status: HTMLElement)
     status.className = "error";
     bar.remove();
     cancel.textContent = "戻る";
-    cancel.onclick = () => void showSelection(node.id);
+    cancel.onclick = () => void showSelection(backTo);
     return;
   }
   status.textContent = "文字の形のデータを保存しています…";
@@ -334,11 +401,9 @@ async function showMap(node: RegionNode) {
   await loaded;
   document.body.dataset.view = "map";
   document.body.dataset.node = node.id;
-  const back = document.createElement("button");
-  back.id = "regions";
-  back.textContent = "地域を選ぶ";
-  back.onclick = () => void showSelection(node.id);
-  panel.replaceChildren(back);
+  panel.replaceChildren();
+  setMenu(false, node.name);
+  onMenu = () => void showSelection(node.id);
 }
 
 // ---------------------------------------------------------------- start

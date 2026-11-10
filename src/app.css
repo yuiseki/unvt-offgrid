@@ -41,11 +41,29 @@ body {
   padding: 10px 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
-body[data-view="map"] #panel {
+body[data-menu="closed"] #panel {
+  display: none;
+}
+#menu {
   align-self: flex-start;
-  padding: 0;
-  background: none;
-  box-shadow: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #222;
+  border: 1px solid #d0c8bc;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+#menu .icon {
+  font-size: 18px;
+  line-height: 1;
+}
+#menu .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 button {
   font: inherit;
@@ -68,8 +86,49 @@ button {
   margin: 8px 0 0;
   padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 38vh;
+  overflow-y: auto;
+}
+.row {
+  display: grid;
+  grid-template-columns: 1fr 60px;
+  align-items: center;
+  gap: 4px 8px;
+}
+.row .name {
+  text-align: left;
+  background: #fff;
+  color: #222;
+  border-color: #d0c8bc;
+}
+.row .name small {
+  color: #666;
+}
+.row button {
+  padding: 5px 10px;
+}
+.row .actions button {
+  width: 100%;
+}
+.row .dl {
+  font-weight: bold;
+}
+.row .open {
+  background: #2a7a3a;
+  border-color: #1d5a2a;
+}
+.row .status,
+.row progress {
+  grid-column: 1 / -1;
+  font-size: 13px;
+}
+.row .status:empty {
+  display: none;
+}
+.row progress {
+  width: 100%;
 }
 .leaf p {
   margin: 6px 0;
