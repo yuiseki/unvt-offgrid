@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { findPath, opfsName, type RegionNode } from "./regions";
+import { findPath, opfsName, sharedOpfsNames, type RegionNode } from "./regions";
 
 const catalog: RegionNode = {
   id: "world",
@@ -46,5 +47,27 @@ describe("opfsName", () => {
 
   it("ignores the query string", () => {
     expect(opfsName("https://example.com/a/b/kanto.pmtiles?v=2")).toBe("kanto.pmtiles");
+  });
+});
+
+describe("sharedOpfsNames", () => {
+  const leaf = (id: string, url: string): RegionNode => ({ id, name: id, pmtiles: { url, bytes: 1, maxzoom: 14 } });
+
+  it("finds archives in different directories that would be stored under one name", () => {
+    const root: RegionNode = {
+      id: "world",
+      name: "世界",
+      children: [
+        leaf("georgia-us", "../../openstreetmap/regions/north-america/us/georgia-251124.pmtiles"),
+        leaf("georgia", "../../openstreetmap/regions/asia/georgia-251124.pmtiles"),
+        leaf("tokyo", "prefectures/tokyo-251124.pmtiles"),
+      ],
+    };
+    expect(sharedOpfsNames(root)).toEqual([["georgia-251124.pmtiles", ["georgia-us", "georgia"]]]);
+  });
+
+  it("finds none in the published catalogue", () => {
+    const published = JSON.parse(readFileSync("public/regions.json", "utf8")) as RegionNode;
+    expect(sharedOpfsNames(published)).toEqual([]);
   });
 });

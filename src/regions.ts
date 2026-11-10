@@ -50,6 +50,20 @@ export function opfsName(url: string): string {
   return decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
 }
 
+/**
+ * Archives that opfsName would store under the same name, as
+ * [name, region ids]. Two such regions would overwrite each other on the
+ * device, and the service worker would answer one with the other's file.
+ */
+export function sharedOpfsNames(root: RegionNode): [string, string[]][] {
+  const byName = new Map<string, string[]>();
+  for (const leaf of leaves(root)) {
+    const name = opfsName(leaf.pmtiles!.url);
+    byName.set(name, [...(byName.get(name) ?? []), leaf.id]);
+  }
+  return [...byName].filter(([, ids]) => ids.length > 1);
+}
+
 /** OPFS directory holding finished archives (and `.part` files while downloading). */
 export const OPFS_DIR = "regions";
 export const PART_SUFFIX = ".part";
