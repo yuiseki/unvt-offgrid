@@ -5,14 +5,9 @@
  * glyphs already published under <maps>/ (styles/, sprites/, fonts/).
  */
 
-/** Precached on install, relative to the service worker scope. */
-export const SHELL_FILES = [
-  "./",
-  "./index.html",
-  "./main.js",
-  "./main.css",
-  "./download-worker.js",
-  "./maplibre-gl-worker.js",
+/** Data files precached on install, relative to the service worker scope.
+ * The code files have hashed names and are added by the build (__SHELL__). */
+export const DATA_FILES = [
   "./regions.json",
   "./geo/world.geojson",
   "./geo/japan.geojson",

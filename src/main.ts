@@ -9,8 +9,11 @@ import { OPFS_DIR, PART_SUFFIX, findPath, leaves, opfsName, type RegionNode } fr
 import { fontstacks, offlineStyle, type StyleLike } from "./style";
 import { OCEAN_TILE, parsePmtilesUrl, worldTileJson, type TileJson } from "./tiles";
 
+/** Hashed file names of the workers, from the build. */
+declare const __FILES__: { maplibreWorker: string; downloadWorker: string };
+
 // maplibre-gl v6 cannot find its worker from inside a bundle.
-maplibregl.setWorkerUrl(new URL("./maplibre-gl-worker.js", location.href).href);
+maplibregl.setWorkerUrl(new URL(`./${__FILES__.maplibreWorker}`, location.href).href);
 
 const APP_URL = new URL("./", location.href).href;
 const CATALOG_URL = new URL("./regions.json", APP_URL).href;
@@ -255,7 +258,7 @@ async function download(node: RegionNode, box: HTMLElement, status: HTMLElement)
   box.querySelector(".actions")?.append(cancel);
 
   await regionsDir(true);
-  const worker = new Worker(new URL("./download-worker.js", APP_URL));
+  const worker = new Worker(new URL(`./${__FILES__.downloadWorker}`, APP_URL));
   cancel.onclick = () => {
     worker.terminate();
     void showSelection(node.id);
