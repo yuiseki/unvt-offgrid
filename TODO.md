@@ -5,7 +5,7 @@
 All browsers on iOS, including Chrome, are believed to run on WebKit, so
 Safari's 7-day eviction of script-writable storage and its OPFS quota may
 also apply to Chrome on iPhone. Nobody on the project has an iOS device to
-check this.
+check this. For now only Safari itself is warned (src/env.ts).
 
 Options for deciding when to show a warning:
 
@@ -16,3 +16,15 @@ Options for deciding when to show a warning:
 - C. Both: always warn on iOS, use the runtime checks elsewhere.
 
 Undecided. Revisit when someone can test on a real iOS device.
+
+## Not done yet
+
+- The seven Kanto prefecture archives are built and published under
+  `.../japan/kanto/prefectures/` but are not in `regions.json`, so the app
+  does not offer them.
+- Updates: a new archive (new date in the file name) is a new file; nothing
+  yet tells the user that a newer version exists or removes the old one.
+- Build regions from the newer regional `.osm.pbf` (e.g. kanto-260906) with
+  planetiler instead of cutting the 2025-11-24 planet archive.
+- The result of `navigator.storage.persist()` is only logged to the console.
+- Test on a real Android phone (so far only phone-sized headless Chromium).
